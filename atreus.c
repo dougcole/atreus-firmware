@@ -35,6 +35,8 @@ int col_pins[COL_COUNT] = {7, 6, 7, 6, 6, 4, 6, 4, 5, 6, 7};
 int pressed_count = 0;
 int presses[KEY_COUNT];
 int last_pressed_count = 0;
+int previous_solo_modifier_key = 0;
+int modifier_key_already_down = 0;
 int last_presses[KEY_COUNT];
 
 #define CTRL(key)   (0x1000 + (key))
@@ -185,6 +187,40 @@ void clear_keys() {
   };
 };
 
+/*
+ * Possble cases:
+ *  * solo modifier key down, no previous history -> set previous_solo_modifier_key
+ *  * solo modifier key down, modifier_key_already_down is set -> do nothing
+ *  * modifier key + other key -> reset previous_solo_modifier_key set modifier_key_already_down
+ *  * no key -> use and reset previous_solo_modifier_key, reset modifier_key_already_down
+ *  * any other key -> reset both variables
+ *
+ */
+void handle_double_duty_keys() {
+  if(pressed_count == 1 && !modifier_key_already_down) {
+    if(keyboard_modifier_keys & KEY_LEFT_CTRL) {
+      previous_solo_modifier_key = KEY_LEFT_CTRL;
+    };
+
+    if(keyboard_modifier_keys & KEY_LEFT_GUI) {
+      previous_solo_modifier_key = KEY_LEFT_GUI;
+    };
+  } else if(pressed_count == 0 && previous_solo_modifier_key) {
+    if(previous_solo_modifier_key == KEY_LEFT_CTRL) {
+      keyboard_keys[0] = KEY_ESC;
+    } else if(previous_solo_modifier_key == KEY_LEFT_GUI) {
+      keyboard_keys[0] = KEY_ENTER;
+    }
+    previous_solo_modifier_key = 0;
+  } else if(pressed_count > 1 && keyboard_modifier_keys & previous_solo_modifier_key) {
+    modifier_key_already_down = 1;
+    previous_solo_modifier_key = 0;
+  } else {
+    modifier_key_already_down = 0;
+    previous_solo_modifier_key = 0;
+  };
+};
+
 int main() {
   init();
   while(1) {
@@ -192,6 +228,7 @@ int main() {
     debounce(DEBOUNCE_PASSES);
     pre_invoke_functions();
     calculate_presses();
+    handle_double_duty_keys();
     usb_keyboard_send();
   };
 };
